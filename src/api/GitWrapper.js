@@ -4,7 +4,6 @@ export default class GitWrapper {
     constructor(token, baseURL = 'https://api.github.com/repos/imperial-space/space-station14-public/contents/') {
         this.token = token;
         this.baseURL = baseURL
-
         this.headers = new Headers({
             'Authorization': `token ${this.token}`,
             'Accept': 'application/vnd.github+json'
@@ -37,9 +36,6 @@ export default class GitWrapper {
     }
 
     async getEntityByPath(path) { // Получение энтити по path. Возвращает: преобразованный в JSON объект с ответом от API. Объект содержит: path - путь поиска, entities - найденные энтити. Entities содержит объекты 
-        console.log(path);
-
-
         if (/\.[^\/]+$/.test(path)) {
             throw new Error('Only folders can be fetched')
         }
@@ -49,7 +45,8 @@ export default class GitWrapper {
             .then(r => r.reduce((acc, v) => Object.assign(acc, {
                 entities: acc.entities.concat(
                     Object.assign(v, {
-                        category: v.path.replace(/.*Entities\//, '').split('/')[0] // TODO: Сделать так, чтобы каждому энтити присваивался его тип назначения (маска, униформа, жилет и т.д.)
+                        category: v.path.replace(/.*Entities\//, '').split('/')[0],
+                        entType: v.path.replace(/.*Entities\//, '').split('/')[1]
                     }))
             }),
                 {
@@ -94,13 +91,9 @@ export default class GitWrapper {
         })
     }
 
-    async objectToMap(obj) {
+    async convertToMap(entitiesArray) {
         return new Promise(res => {
-            const map = new Map()
-
-            for (let key in obj) {
-                map.set(obj[key].path, obj[key])
-            }
+            const map = Object.fromEntries(entitiesArray.map(entity => [entity.path, entity]))
 
             res(map)
         })
@@ -117,5 +110,19 @@ export default class GitWrapper {
 
         return entity
 
+    }
+    async webhookRedeliver(hook, delivery) {
+        const parts = this.baseURL.split('/')
+        const owner = parts[4]
+        const repo = parts[5]
+
+        const response = this.sendRequest(new URL(`${owner}/${repo}/hooks/${hook}/deliveries/${delivery}/attempts`, "https://api.github.com/repos"), 'POST')
+
+        if (await response.statusCode === 202) {
+            return response
+        } else {
+            console.error(await response);
+            throw new Error("Failed webhook redelivering.");
+        }
     }
 }
