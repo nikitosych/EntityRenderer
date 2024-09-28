@@ -1,9 +1,9 @@
 import YAML from 'yaml'
 
-export default class GitWrapper {
-    constructor(token, baseURL = 'https://api.github.com/repos/imperial-space/space-station14-public/contents/') {
+export class GitWrapper {
+    constructor(token, repoURL = 'https://api.github.com/repos/imperial-space/space-station14-public/contents/') {
         this.token = token;
-        this.baseURL = baseURL
+        this.repoURL = repoURL
         this.headers = new Headers({
             'Authorization': `token ${this.token}`,
             'Accept': 'application/vnd.github+json'
@@ -20,15 +20,11 @@ export default class GitWrapper {
             options.body = body;
         }
 
-        console.log(`${method}:`, url, headers, body);
-
-
-        const successCodes = [200, 302, 304, 201, 202, 204]
         const response = fetch(url, options)
         const responseBody = (await response)
 
-        if (!successCodes.includes(responseBody.status)) {
-            console.log(responseBody);
+        if (![200, 302, 304, 201, 202, 204].includes(responseBody.status)) {
+            console.log(responseBody, this.headers);
             throw new Error('An error has occurred during the request.')
         }
 
@@ -40,7 +36,7 @@ export default class GitWrapper {
             throw new Error('Only folders can be fetched')
         }
 
-        return this.sendRequest(new URL(path, this.baseURL).toString())
+        return this.sendRequest(new URL(path, this.repoURL).toString())
             .then(r => r.json())
             .then(r => r.reduce((acc, v) => Object.assign(acc, {
                 entities: acc.entities.concat(
@@ -93,7 +89,22 @@ export default class GitWrapper {
 
     async convertToMap(entitiesArray) {
         return new Promise(res => {
-            const map = Object.fromEntries(entitiesArray.map(entity => [entity.path, entity]))
+            // const map = Object.fromEntries(entitiesArray.map(entity => [entity.path, entity]))
+
+            const map = {}
+
+            for (let entity of entitiesArray) {
+
+                if (!map[entity.path]) {
+                    map[entity.path] = {}
+                }
+
+                map[entity.path]['name'] = entity.name;
+                map[entity.path]['content'] = entity.content;
+                map[entity.path]['category'] = entity.category;
+                map[entity.path]['entType'] = entity.entType;
+            }
+
 
             res(map)
         })
@@ -112,7 +123,7 @@ export default class GitWrapper {
 
     }
     async webhookRedeliver(hook, delivery) {
-        const parts = this.baseURL.split('/')
+        const parts = this.repoURL.split('/')
         const owner = parts[4]
         const repo = parts[5]
 

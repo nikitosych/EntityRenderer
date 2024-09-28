@@ -1,31 +1,22 @@
-import "dotenv/config.js"
 import express from 'express'
-import morgan from "morgan"
 import SmeeClient from 'smee-client'
 import cors from 'cors'
 import path from 'path'
-import GitWrapper from '../api/GitWrapper.js';
+import { GitWrapper } from '../api/GitWrapper.js';
 import verifySignature from '../utils/verifySignature.js';
 
 
 // СЕРВЕР
 
-// 1. Сервер получает данные от API Github
-// 2. Сервер обрабатывает эти данные
-// 3. Сервер сохраняет данные в кеш
-// 4. Сервер делает данные в кеше доступными по API эндпойнту
-// 5. Клиент сохраняет
-
-const host = 'localhost'
-const port = 8000;
-const githubToken = process.env.GITHUB_TOKEN_CLASSIC
+const host = process.env.HOST;
+const port = process.env.PORT;
+const githubToken = process.env.GITHUB_TOKEN_CLASSIC;
 const webhookSecret = process.env.WEBHOOK_SECRET;
 
 const app = express()
 const wrapper = new GitWrapper(githubToken, 'https://api.github.com/repos/nikitosych/space-station14-public/contents/')
 
 app.use(cors())
-app.use(morgan('combined'))
 app.use(express.static(path.resolve(process.cwd(), 'public')))
 
 // 1. Сервер получает данные от API Github
@@ -51,8 +42,9 @@ async function fetchData() {
 
 
 async function startServer() {
-    let webhookData = []
-    let cachedMap = null
+    const webhookData = []
+
+    let cachedMap
 
     try {
         cachedMap = await fetchData();
@@ -82,9 +74,9 @@ async function startServer() {
 
     app.post('/webhook', express.json({ type: 'application/json' }), async (req, res) => {
         try {
-            const verified = await verifySignature(webhookSecret, req.headers['x-hub-signature-256'], JSON.stringify(req.body));
+            const isSignatureValid = await verifySignature(webhookSecret, req.headers['x-hub-signature-256'], JSON.stringify(req.body));
 
-            if (!verified) {
+            if (!isSignatureValid) {
                 return res.sendStatus(401); // если подпись не прошла валидацию
             }
 
@@ -104,7 +96,7 @@ async function startServer() {
                             if (cachedMap[filePath]) {
                                 console.log(`Trying to update ${filePath} entity... : `, cachedMap[filePath]);
                                 try {
-                                    const newEntity = await wrapper.getParsedEntity(new URL(filePath, wrapper.baseURL));
+                                    const newEntity = await wrapper.getParsedEntity(new URL(filePath, wrapper.repoURL));
                                     cachedMap[filePath] = newEntity;
                                     console.log(`Gotcha! Updated entity ${filePath} is: `, cachedMap[filePath]);
                                 } catch (e) {
